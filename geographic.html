@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<header>
+    <img src="https://pla.pna.ps/public/images/Logo.png" alt="Header Image Description" style="width: 320px; height: auto;">
+</header>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAL-GRF2023 - Palestine1923</title>
+	
+    <script>
+        // Constants for GRS80 ellipsoid
+        const a = 6378137.0; // semi-major axis
+        const f = 1 / 298.257222100882; // flattening
+        const b = a * (1 - f); // semi-minor axis
+        const e2 = 2 * f - f * f; // first eccentricity squared
+
+        // 7-parameter transformation parameters (example values)
+        const dx2 = -0.3889; // X translation
+        const dy2 = 0.2489; // Y translation
+        const dz2 = 0.3589; // Z translation
+        const dx = -24.0024; // X translation (meters)
+        const dy = -17.1032; // Y translation (meters)
+        const dz = -17.8444; // Z translation (meters)
+        const rx = -0.0000016003; // X rotation (radians)
+        const ry = -0.000008982; // Y rotation (radians)
+        const rz = 0.0000080949; // Z rotation (radians)
+        const scale =0.0000054248; // scale factor ppm
+       
+
+        function dmsToDecimal(degrees, minutes, seconds) {
+            return degrees + minutes / 60 + seconds / 3600;
+        }
+
+        function decimalToDMS(decimal) {
+            const degrees = Math.floor(decimal);
+            const minutes = Math.floor((decimal - degrees) * 60);
+            const seconds = ((decimal - degrees) * 60 - minutes) * 60;
+            return { degrees, minutes, seconds };
+        }
+
+        function latLonHeightToXYZ(lat, lon, height) {
+            const latRad = lat * Math.PI / 180;
+            const lonRad = lon * Math.PI / 180;
+            const N = a / Math.sqrt(1 - e2 * Math.sin(latRad) * Math.sin(latRad));
+            const X = (N + height) * Math.cos(latRad) * Math.cos(lonRad);
+            const Y = (N + height) * Math.cos(latRad) * Math.sin(lonRad);
+            const Z = (N * (1 - e2) + height) * Math.sin(latRad);
+            return { X, Y, Z };
+        }
+
+        function transformXYZ(X1, Y1, Z1) {
+			const X2=X1-dx2;
+			const Y2=Y1-dy2;
+			const Z2=Z1-dz2;
+			
+            const Xt = X2+dx + scale * X2 + rz * Y2 - ry * Z2;
+            const Yt = Y2+dy + scale * Y2 -rz * X2  + rx * Z2;
+            const Zt = Z2+dz + scale * Z2  +ry * X2 - rx * Y2 ;
+            
+            return { Xt, Yt, Zt };
+        }
+		
+		function xyzToLatLonHeight(Xt, Yt, Zt) {
+            const p = Math.sqrt(Xt * Xt + Yt * Yt); // distance from Z-axis
+            let lat3 = Math.atan2(Zt, p * (1 - e2)); // initial latitude estimate
+            let height3 = 0;
+            let N = 0;
+            let deltaHeight = 0;
+            let deltaLat = 0;
+
+            // Iterate to improve accuracy
+            for (let i = 0; i < 15; i++) {
+                N = a / Math.sqrt(1 - e2 * Math.sin(lat3) * Math.sin(lat3));
+                height3 = p / Math.cos(lat3) - N;
+                const latNew = Math.atan2(Zt, p * (1 - e2 * (N / (N + height3))));
+                deltaLat = Math.abs(latNew - lat3);
+                lat3 = latNew;
+
+                if (deltaLat < 1e-12) break; // convergence check
+            }
+
+            const lon3 = Math.atan2(Yt, Xt); // longitude
+			
+			const newHeight = height3;
+			const newLat=lat3 * 180 / Math.PI;
+			const newLon=lon3 * 180 / Math.PI
+			
+            return { newLat, newLon, newHeight } ;
+        
+        }
+
+        function xyzToLatLonHeightZZZZZZ(Xt, Yt, Zt) {
+			const X3=Xt;
+			const Y3=Yt;
+			const Z3=Zt;
+			
+            const p = Math.sqrt(X3 * X3 + Y3 * Y3);
+            const theta = Math.atan((Z3 * a) / (p * b));
+            const lon3 = Math.atan2(Y3, X3);
+            const lat3 = Math.atan((Z3 + e2 * b * Math.pow(Math.sin(theta), 3)) / (p - e2 * a * Math.pow(Math.cos(theta), 3)));
+            const N = a / Math.sqrt(1 - e2 * Math.sin(lat3) * Math.sin(lat3));
+            const newHeight = p / Math.cos(lat3) - N;
+			const newLat=lat3 * 180 / Math.PI;
+			const newLon=lon3 * 180 / Math.PI;
+            return { newLat, newLon, newHeight };
+        }
+
+        function latLonToPalGRF(lat2, lon2) {
+			const lat0 = 31.7777777777 * Math.PI / 180; // latitude of origin
+            const lon0 = 35.235 * Math.PI / 180; // central meridian
+            const k0 = 1.0000030; // scale factor
+            const falseEasting = 220000.000;
+            const falseNorthing = 500000.000;
+			
+            const lat4 = lat2 * Math.PI / 180;
+            const lon4 = lon2 * Math.PI / 180;
+            //const lat0Rad = lat0 * Math.PI / 180;
+            //const lon0Rad = lon0 * Math.PI / 180;
+
+            const e = Math.sqrt(e2);
+            const n = (a - b) / (a + b);
+            const nu = a / Math.sqrt(1 - e2 * Math.sin(lat4) * Math.sin(lat4));
+            const A = (lon4 - lon0) * Math.cos(lat4);
+            const T = Math.tan(lat4) * Math.tan(lat4);
+            const C = e2 * Math.cos(lat4) * Math.cos(lat4) / (1 - e2);
+            const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * lat4 -
+                (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * lat4) +
+                (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * lat4) -
+                (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * lat4));
+
+            const M0 = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * lat0 -
+                (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * lat0) +
+                (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * lat0) -
+                (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * lat0));
+
+            const easting = falseEasting + k0 * nu * (A + (1 - T + C) * A * A * A / 6 +
+                (5 - 18 * T + T * T + 72 * C - 58 * e2) * A * A * A * A * A / 120);
+
+            const northing = falseNorthing + k0 * (M - M0 + nu * Math.tan(lat4) * (A * A / 2 +
+                (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24 +
+                (61 - 58 * T + T * T + 600 * C - 330 * e2) * A * A * A * A * A * A / 720));
+				
+            return { easting, northing };
+        }
+
+		function latLonToPal1923Grid(lat2, lon2) {
+			
+			 // Pal1923_Grid modified TM projection parameters
+			const lat0 = 31.73439361111111* Math.PI / 180; // latitude of origin in degrees
+			const lon0 = 35.20451694444445* Math.PI / 180; // central meridian in degrees
+			const k0 = 1.0000067; // scale factor
+			const falseEasting = 169529.584; // false easting
+			const falseNorthing = 126907.390; // false northing
+			
+            const lat0Rad = lat0 ;
+            const lon0Rad = lon0 ;
+			
+			 const lat4 = lat2 * Math.PI / 180;
+            const lon4 = lon2 * Math.PI / 180;
+            //const lat0Rad = lat0 * Math.PI / 180;
+            //const lon0Rad = lon0 * Math.PI / 180;
+
+            const e = Math.sqrt(e2);
+            const n = (a - b) / (a + b);
+            const nu = a / Math.sqrt(1 - e2 * Math.sin(lat4) * Math.sin(lat4));
+            const A = (lon4 - lon0) * Math.cos(lat4);
+            const T = Math.tan(lat4) * Math.tan(lat4);
+            const C = e2 * Math.cos(lat4) * Math.cos(lat4) / (1 - e2);
+            const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * lat4 -
+                (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * lat4) +
+                (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * lat4) -
+                (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * lat4));
+
+            const M0 = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * lat0 -
+                (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * lat0) +
+                (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * lat0) -
+                (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * lat0));
+
+            const easting1 = falseEasting + k0 * nu * (A + (1 - T + C) * A * A * A / 6 +
+                (5 - 18 * T + T * T + 72 * C - 58 * e2) * A * A * A * A * A / 120);
+
+            const northing1 = falseNorthing + k0 * (M - M0 + nu * Math.tan(lat4) * (A * A / 2 +
+                (5 - T + 9 * C + 4 * C * C) * A * A * A * A / 24 +
+                (61 - 58 * T + T * T + 600 * C - 330 * e2) * A * A * A * A * A * A / 720));
+				
+            return { easting1, northing1 };
+        }
+        function convert() {
+            const latDMS = document.getElementById('latDMS').value.split(',');
+            const lonDMS = document.getElementById('lonDMS').value.split(',');
+            const height = parseFloat(document.getElementById('height').value);
+
+            const lat = dmsToDecimal(parseFloat(latDMS[0]), parseFloat(latDMS[1]), parseFloat(latDMS[2]));
+            const lon = dmsToDecimal(parseFloat(lonDMS[0]), parseFloat(lonDMS[1]), parseFloat(lonDMS[2]));
+
+            const { X, Y, Z } = latLonHeightToXYZ(lat, lon, height);
+			const { easting, northing } = latLonToPalGRF(lat, lon);
+			
+            const { Xt, Yt, Zt } = transformXYZ(X, Y, Z);
+           const { newLat, newLon, newHeight } = xyzToLatLonHeight(Xt, Yt, Zt);
+			const { easting1, northing1 } = latLonToPal1923Grid(newLat, newLon);
+
+            document.getElementById('result').innerHTML = `
+				<p>-------------------------------------------</p>
+                <p>PAL-GRF Geocentric X,Y,Z: </p>
+				<p style="color: blue;">${X.toFixed(4)} , ${Y.toFixed(4)} , ${Z.toFixed(4)}</p>
+				<p>PAL-GRF Grid (E, N): </p>
+                <p style="color: blue;">${easting.toFixed(4)} , ${northing.toFixed(4)} </p>
+				<p>-------------------------------------------</p>
+				<p>    Palestine1923  Coordinates  (Modified TM)</p>
+				<p>-------------------------------------------</p>
+				<p>Pal1923 Geocentric X (GRS80): </p>
+                <p style="color: blue;">${Xt.toFixed(4)} , ${Yt.toFixed(4)} , ${Zt.toFixed(4)}</p>
+				<p>Pal1923 Geographic (Modified TM): </p>
+                <p style="color: blue;">${newLat.toFixed(9)} , ${newLon.toFixed(9)} , ${newHeight.toFixed(4)}</p>
+                <p>Pal1923 Grid (E , N)  (TM): </p>
+                <p style="color: blue;">${easting1.toFixed(4)} , ${northing1.toFixed(4)}</p>
+				<p>-------------------------------------------</p>
+    <p> </p>
+    <p> Programmed by:  Dr. Ghadi Zakarneh </p>
+    <a href="mailto:ghadi@ppu.edu ">Send email: ghadi@ppu.edu </a><br>
+    <a href="https://staff.ppu.edu/ghadi">staff.ppu.edu/ghadi </a>
+            `;
+        }
+    </script>
+</head>
+<body style="justify-items: center;">
+
+<a style="background-color: blue" href="index.html" class="button">Home</a>
+<a style="background-color: blue" href="parameters.html" class="button">Parameters</a>
+<a style="background-color: grey" href="geographic.html" class="button">Geographic</a>
+<a style="background-color: blue" href="Grid.html" class="button">Grid</a>
+
+	<style>
+        /* Optional CSS styling for better appearance */
+        button, .button {
+            padding: 3px 3px;
+            margin: 2px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        button:hover, .button:hover {
+            background-color: #45a049;
+        }
+    </style>
+	
+     <p>Enter (Lat,Lon,h)dms (PAL-GRF2023):</p>
+    <form>
+        <input type="text" id="latDMS" value="31,30,17.50284">
+        <input type="text" id="lonDMS" value="35,3,30.162564"><br>
+        <input type="number" id="height" value="933.4488">
+        <button type="button" onclick="convert()">Calculate</button>
+    </form>
+	
+    <div id="result" style="justify-items: center;"></div>
+	
+</body>
+</html>
