@@ -1460,11 +1460,15 @@ src="index_files/image003.jpg" v:shapes="_x0635__x0648__x0631__x0629__x0020_5"><
 name="_Hlk190978056"></a></h1>
 
 <button onclick="translatePage()">Translate to English</button>
-
+<button onclick="cancelTranslation()">Original Ar</button>
     <script>
         function translatePage() {
             // Change the language of the page to English
             window.location.href = "https://translate.google.com/translate?hl=en&sl=ar&tl=en&u=" + encodeURIComponent(window.location.href);
+        }
+	function cancelTranslation() {
+            const content = document.getElementById('content');
+            content.innerHTML = originalContent;
         }
     </script>
 	
